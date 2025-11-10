@@ -30,10 +30,11 @@
 </style>
 <div class="wrap">
   <h1 style="margin:0 0 8px">TailorCover</h1>
-  <p class="muted">Paste your <strong>Job Description</strong> and <strong>Resume JSON</strong>, or click <em>Load Sample</em>. Generate, then save or download your letter.</p>
+  <p class="muted">Paste a <strong>Job Description</strong> and a <strong>Resume JSON</strong>, or click <em>Load Sample</em>. Then Generate.</p>
   <div class="grid">
     <div class="row bar no-print">
-      <input id="base" value="http://localhost:8000" title="Backend URL"/>
+      <!-- Leave blank or set your Render URL; users can paste their own -->
+      <input id="base" value="" placeholder="https://your-backend.onrender.com" title="Backend URL"/>
       <button class="btn" id="sample">Load Sample</button>
     </div>
     <div class="row no-print">
@@ -42,7 +43,7 @@
     </div>
     <div class="row no-print">
       <label>Company</label>
-      <input id="company" placeholder="Buildsoft" />
+      <input id="company" placeholder="TechNova" />
     </div>
     <div class="row no-print">
       <label>Job Description</label>
@@ -50,8 +51,8 @@
     </div>
     <div class="row no-print">
       <label>Resume JSON</label>
-      <textarea id="resume" placeholder='{"name":"Taygan Freeman", "email":"taygan.freeman@gmail.com", ...}'></textarea>
-      <p class="muted">Tip: Your inputs auto‑save to this browser.</p>
+      <textarea id="resume" placeholder='{"name":"Alex Carter","email":"alex.carter@example.com", ...}'></textarea>
+      <p class="muted">Tip: Inputs auto-save to this browser only.</p>
     </div>
     <div class="actions no-print">
       <button class="btn" id="go">Generate</button>
@@ -69,32 +70,55 @@
 </div>
 <script>
 const $ = (id)=>document.getElementById(id);
-const LS = {
-  role: 'tc.role', company: 'tc.company', jd: 'tc.jd', resume: 'tc.resume', out: 'tc.out', letters: 'tc.letters'
+const LS = { role:'tc.role', company:'tc.company', jd:'tc.jd', resume:'tc.resume', out:'tc.out', letters:'tc.letters', base:'tc.base' };
+
+// --- Neutral sample (no personal data) ---
+const SAMPLE_RESUME = {
+  "name": "Alex Carter",
+  "email": "alex.carter@example.com",
+  "phone": "0400 123 456",
+  "location": "Sydney, NSW",
+  "links": ["https://github.com/example", "https://linkedin.com/in/example"],
+  "summary": "Enthusiastic software engineering graduate with a passion for full-stack development, cloud computing, and applied AI solutions.",
+  "skills": ["Python", "JavaScript", "React", "FastAPI", "Docker", "Git", "CI/CD", "AWS"],
+  "experience": [
+    {
+      "company": "TechNova",
+      "title": "Software Engineering Intern",
+      "start": "2023",
+      "end": "2024",
+      "bullets": [
+        "Contributed to a REST API used by thousands of users daily.",
+        "Automated deployment pipelines with Docker and GitHub Actions."
+      ]
+    },
+    {
+      "company": "University Projects",
+      "title": "AI Developer",
+      "start": "2022",
+      "end": "2023",
+      "bullets": [
+        "Built an ML model to classify environmental sound events.",
+        "Collaborated in a 4-person agile team delivering weekly sprint demos."
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "Bachelor of Software Engineering",
+      "school": "Example University",
+      "start": "2020",
+      "end": "2024"
+    }
+  ],
+  "languages": ["English"]
 };
 
-const SAMPLE_RESUME = {
-  name: "Taygan Freeman",
-  email: "taygan.freeman@gmail.com",
-  phone: "0450 266 690",
-  location: "Sydney, NSW",
-  links: ["github.com/taygan-freeman","linkedin.com/in/taygan-freeman"],
-  summary: "Software Engineering (AI) graduate building ML-driven apps, full-stack tools, and game-adjacent systems.",
-  skills: ["Python","FastAPI","NumPy","PyTorch","OpenCV","JavaScript","TypeScript","React","Node","Vite","Docker","GitHub Actions","Postgres","SQLite","AWS","Azure","GCP","C/C++","ESP32","Unity","Godot","Firebase"],
-  experience: [
-    { company: "Personal Projects", title: "Full‑Stack / AI Developer", start: "2023", end: "Present", bullets: [
-      "Built an AI NPC companion for D&D with selective listening, memory via Firebase, and TTS.",
-      "Prototyped a survival‑focused Minecraft agent with safe navigation and auto‑respawn.",
-      "Dockerized multi‑service apps; set up CI with GitHub Actions and unit tests.",
-      "Developed a low‑resource idle town widget (Godot) with SQLite persistence.",
-      "Implemented small REST APIs with FastAPI and deployed on cloud hosts."
-    ]}
-  ],
-  education: [ { degree: "B. Software Engineering (Artificial Intelligence)", school: "Torrens University", start: "2020", end: "2024" } ]
-};
 const SAMPLE_JD = `We seek a graduate software engineer with Python/TypeScript experience, familiarity with cloud (AWS/Azure), CI/CD, and interest in AI. Responsibilities include building REST APIs, contributing to frontend components, and writing tests.`;
 
+// --- Autosave ---
 function loadAutosave(){
+  $('base').value = localStorage.getItem(LS.base) || $('base').value;
   $('role').value = localStorage.getItem(LS.role) || '';
   $('company').value = localStorage.getItem(LS.company) || '';
   $('jd').value = localStorage.getItem(LS.jd) || '';
@@ -104,19 +128,19 @@ function loadAutosave(){
   renderHistory();
 }
 function saveAutosave(){
+  localStorage.setItem(LS.base, $('base').value);
   localStorage.setItem(LS.role, $('role').value);
   localStorage.setItem(LS.company, $('company').value);
   localStorage.setItem(LS.jd, $('jd').value);
   localStorage.setItem(LS.resume, $('resume').value);
   if(!$('out').hidden) localStorage.setItem(LS.out, $('out').textContent);
 }
-['role','company','jd','resume'].forEach(id=>{
+['base','role','company','jd','resume'].forEach(id=>{
   document.addEventListener('input', (e)=>{ if(e.target && e.target.id===id) saveAutosave(); });
 });
 
-function getLetters(){
-  try{ return JSON.parse(localStorage.getItem(LS.letters)||'[]'); }catch{ return []; }
-}
+// --- History helpers ---
+function getLetters(){ try{ return JSON.parse(localStorage.getItem(LS.letters)||'[]'); }catch{ return []; } }
 function setLetters(arr){ localStorage.setItem(LS.letters, JSON.stringify(arr)); }
 function renderHistory(){
   const arr = getLetters();
@@ -124,7 +148,7 @@ function renderHistory(){
   box.hidden = arr.length===0;
   const ul = $('histList');
   ul.innerHTML = '';
-  arr.slice().reverse().forEach((item, idx)=>{
+  arr.slice().reverse().forEach(item=>{
     const li = document.createElement('li');
     const left = document.createElement('span');
     left.textContent = `${new Date(item.ts).toLocaleString()} — ${item.company} / ${item.role}`;
@@ -134,18 +158,21 @@ function renderHistory(){
     view.onclick = ()=>{ $('out').hidden=false; $('out').textContent=item.text; saveAutosave(); };
     del.onclick = ()=>{ const all=getLetters(); const i=all.findIndex(x=>x.ts===item.ts); if(i>-1){ all.splice(i,1); setLetters(all); renderHistory(); } };
     right.append(view, del);
-    li.append(left,right); ul.append(li);
+    li.append(left, right);
+    ul.append(li);
   });
 }
 
+// --- Sample loader ---
 $('sample').onclick = () => {
   $('role').value = 'Graduate Software Engineer';
-  $('company').value = 'Buildsoft';
+  $('company').value = 'TechNova';
   $('jd').value = SAMPLE_JD;
   $('resume').value = JSON.stringify(SAMPLE_RESUME, null, 2);
   saveAutosave();
 };
 
+// --- Generate ---
 $('go').onclick = async () => {
   try {
     const payload = {
@@ -156,18 +183,25 @@ $('go').onclick = async () => {
       tone: 'concise, confident',
       length: 'short'
     };
+    const base = $('base').value.replace(/\/$/, '');
+    if(!base){ throw new Error('Please enter the Backend URL (e.g., https://your-backend.onrender.com)'); }
     $('out').hidden = false; $('out').textContent = 'Generating...\n';
-    const res = await fetch(`${$('base').value.replace(/\/$/, '')}/generate`,{
+    const res = await fetch(`${base}/generate`,{
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
     });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error(`Request failed (${res.status}): ${t}`);
+    }
     const data = await res.json();
     $('out').textContent = data.cover_letter || JSON.stringify(data,null,2);
     saveAutosave();
   } catch (e) {
-    $('out').hidden = false; $('out').textContent = 'Invalid resume JSON or request failed.';
+    $('out').hidden = false; $('out').textContent = (e && e.message) ? e.message : 'Invalid resume JSON or request failed.';
   }
 };
 
+// --- Save / Download / Print ---
 $('save').onclick = () => {
   if($('out').hidden) return;
   const arr = getLetters();
@@ -186,21 +220,16 @@ $('dltxt').onclick = () => {
 
 $('dlpdf').onclick = () => {
   if($('out').hidden) return;
-  // Open a printable view and let the user save as PDF via the browser dialog.
   const w = window.open('', '_blank');
   const title = `${($('company').value||'Company')} — ${($('role').value||'Role')} — Cover Letter`;
   const css = `@page{margin:20mm} body{font-family:serif;line-height:1.35;color:#000;padding:0 6mm} h1{font-size:18pt;margin:0 0 8pt} pre{white-space:pre-wrap;word-wrap:break-word}`;
   w.document.write(`<!doctype html><html><head><title>${title}</title><style>${css}</style></head><body><h1>${title}</h1><pre>${escapeHtml($('out').textContent)}</pre></body></html>`);
-  w.document.close();
-  w.focus();
-  setTimeout(()=> w.print(), 300);
+  w.document.close(); w.focus(); setTimeout(()=> w.print(), 300);
 };
 
 $('printBtn').onclick = () => window.print();
 
-function escapeHtml(s){
-  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-}
+function escapeHtml(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 
 window.addEventListener('load', loadAutosave);
 </script>
