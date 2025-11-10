@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>TailorCover</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;background:#0d1117;color:#e6edf3;margin:0}
+  .wrap{max-width:920px;margin:24px auto;padding:16px}
+  textarea,input,button{width:100%;padding:10px;border-radius:10px;border:1px solid #30363d;background:#0b1320;color:#e6edf3}
+  textarea{min-height:160px}
+  .grid{display:grid;gap:12px;grid-template-columns:1fr}
+  .row{display:grid;gap:8px}
+  .out{white-space:pre-wrap;background:#0b1320;border:1px solid #30363d;border-radius:12px;padding:14px}
+  .btn{cursor:pointer}
+  .muted{color:#9da7b3;font-size:12px}
+  .bar{display:flex;gap:8px;align-items:center}
+  .bar > *{flex:1}
+  .actions{display:flex;gap:8px}
+  .history{margin-top:16px;border:1px solid #30363d;border-radius:12px;padding:12px}
+  .history h3{margin:0 0 8px}
+  .history ul{list-style:none;padding:0;margin:0;display:grid;gap:6px}
+  .history li{display:flex;justify-content:space-between;gap:8px}
+  .history button{width:auto}
+  @media print{
+    body{background:#fff;color:#000}
+    .wrap{max-width:800px}
+    .no-print{display:none !important}
+    .out{background:#fff;border:0;color:#000}
+  }
+</style>
+<div class="wrap">
+  <h1 style="margin:0 0 8px">TailorCover</h1>
+  <p class="muted">Paste your <strong>Job Description</strong> and <strong>Resume JSON</strong>, or click <em>Load Sample</em>. Generate, then save or download your letter.</p>
+  <div class="grid">
+    <div class="row bar no-print">
+      <input id="base" value="http://localhost:8000" title="Backend URL"/>
+      <button class="btn" id="sample">Load Sample</button>
+    </div>
+    <div class="row no-print">
+      <label>Role</label>
+      <input id="role" placeholder="Graduate Software Engineer" />
+    </div>
+    <div class="row no-print">
+      <label>Company</label>
+      <input id="company" placeholder="Buildsoft" />
+    </div>
+    <div class="row no-print">
+      <label>Job Description</label>
+      <textarea id="jd" placeholder="Paste JD here..."></textarea>
+    </div>
+    <div class="row no-print">
+      <label>Resume JSON</label>
+      <textarea id="resume" placeholder='{"name":"Taygan Freeman", "email":"taygan.freeman@gmail.com", ...}'></textarea>
+      <p class="muted">Tip: Your inputs auto‑save to this browser.</p>
+    </div>
+    <div class="actions no-print">
+      <button class="btn" id="go">Generate</button>
+      <button class="btn" id="save">Save Letter</button>
+      <button class="btn" id="dlpdf">Download PDF</button>
+      <button class="btn" id="dltxt">Download .txt</button>
+      <button class="btn" id="printBtn">Print</button>
+    </div>
+    <div id="out" class="out" hidden></div>
+    <div class="history no-print" id="history" hidden>
+      <h3>Saved Letters</h3>
+      <ul id="histList"></ul>
+    </div>
+  </div>
+</div>
+<script>
+const $ = (id)=>document.getElementById(id);
+const LS = {
+  role: 'tc.role', company: 'tc.company', jd: 'tc.jd', resume: 'tc.resume', out: 'tc.out', letters: 'tc.letters'
+};
+
+const SAMPLE_RESUME = {
+  name: "Taygan Freeman",
+  email: "taygan.freeman@gmail.com",
+  phone: "0450 266 690",
+  location: "Sydney, NSW",
+  links: ["github.com/taygan-freeman","linkedin.com/in/taygan-freeman"],
+  summary: "Software Engineering (AI) graduate building ML-driven apps, full-stack tools, and game-adjacent systems.",
+  skills: ["Python","FastAPI","NumPy","PyTorch","OpenCV","JavaScript","TypeScript","React","Node","Vite","Docker","GitHub Actions","Postgres","SQLite","AWS","Azure","GCP","C/C++","ESP32","Unity","Godot","Firebase"],
+  experience: [
+    { company: "Personal Projects", title: "Full‑Stack / AI Developer", start: "2023", end: "Present", bullets: [
+      "Built an AI NPC companion for D&D with selective listening, memory via Firebase, and TTS.",
+      "Prototyped a survival‑focused Minecraft agent with safe navigation and auto‑respawn.",
+      "Dockerized multi‑service apps; set up CI with GitHub Actions and unit tests.",
+      "Developed a low‑resource idle town widget (Godot) with SQLite persistence.",
+      "Implemented small REST APIs with FastAPI and deployed on cloud hosts."
+    ]}
+  ],
+  education: [ { degree: "B. Software Engineering (Artificial Intelligence)", school: "Torrens University", start: "2020", end: "2024" } ]
+};
+const SAMPLE_JD = `We seek a graduate software engineer with Python/TypeScript experience, familiarity with cloud (AWS/Azure), CI/CD, and interest in AI. Responsibilities include building REST APIs, contributing to frontend components, and writing tests.`;
+
+function loadAutosave(){
+  $('role').value = localStorage.getItem(LS.role) || '';
+  $('company').value = localStorage.getItem(LS.company) || '';
+  $('jd').value = localStorage.getItem(LS.jd) || '';
+  $('resume').value = localStorage.getItem(LS.resume) || '';
+  const out = localStorage.getItem(LS.out);
+  if(out){ $('out').hidden = false; $('out').textContent = out; }
+  renderHistory();
+}
+function saveAutosave(){
+  localStorage.setItem(LS.role, $('role').value);
+  localStorage.setItem(LS.company, $('company').value);
+  localStorage.setItem(LS.jd, $('jd').value);
+  localStorage.setItem(LS.resume, $('resume').value);
+  if(!$('out').hidden) localStorage.setItem(LS.out, $('out').textContent);
+}
+['role','company','jd','resume'].forEach(id=>{
+  document.addEventListener('input', (e)=>{ if(e.target && e.target.id===id) saveAutosave(); });
+});
+
+function getLetters(){
+  try{ return JSON.parse(localStorage.getItem(LS.letters)||'[]'); }catch{ return []; }
+}
+function setLetters(arr){ localStorage.setItem(LS.letters, JSON.stringify(arr)); }
+function renderHistory(){
+  const arr = getLetters();
+  const box = $('history');
+  box.hidden = arr.length===0;
+  const ul = $('histList');
+  ul.innerHTML = '';
+  arr.slice().reverse().forEach((item, idx)=>{
+    const li = document.createElement('li');
+    const left = document.createElement('span');
+    left.textContent = `${new Date(item.ts).toLocaleString()} — ${item.company} / ${item.role}`;
+    const right = document.createElement('span');
+    const view = document.createElement('button'); view.className='btn'; view.textContent='View';
+    const del = document.createElement('button'); del.className='btn'; del.textContent='Delete';
+    view.onclick = ()=>{ $('out').hidden=false; $('out').textContent=item.text; saveAutosave(); };
+    del.onclick = ()=>{ const all=getLetters(); const i=all.findIndex(x=>x.ts===item.ts); if(i>-1){ all.splice(i,1); setLetters(all); renderHistory(); } };
+    right.append(view, del);
+    li.append(left,right); ul.append(li);
+  });
+}
+
+$('sample').onclick = () => {
+  $('role').value = 'Graduate Software Engineer';
+  $('company').value = 'Buildsoft';
+  $('jd').value = SAMPLE_JD;
+  $('resume').value = JSON.stringify(SAMPLE_RESUME, null, 2);
+  saveAutosave();
+};
+
+$('go').onclick = async () => {
+  try {
+    const payload = {
+      resume: JSON.parse($('resume').value),
+      job_description: $('jd').value,
+      role: $('role').value,
+      company: $('company').value,
+      tone: 'concise, confident',
+      length: 'short'
+    };
+    $('out').hidden = false; $('out').textContent = 'Generating...\n';
+    const res = await fetch(`${$('base').value.replace(/\/$/, '')}/generate`,{
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    $('out').textContent = data.cover_letter || JSON.stringify(data,null,2);
+    saveAutosave();
+  } catch (e) {
+    $('out').hidden = false; $('out').textContent = 'Invalid resume JSON or request failed.';
+  }
+};
+
+$('save').onclick = () => {
+  if($('out').hidden) return;
+  const arr = getLetters();
+  arr.push({ ts: Date.now(), role: $('role').value || 'Role', company: $('company').value || 'Company', text: $('out').textContent });
+  setLetters(arr); renderHistory();
+};
+
+$('dltxt').onclick = () => {
+  if($('out').hidden) return;
+  const blob = new Blob([$('out').textContent], {type: 'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${($('company').value||'company')}-${($('role').value||'role')}.txt`;
+  a.click(); URL.revokeObjectURL(a.href);
+};
+
+$('dlpdf').onclick = () => {
+  if($('out').hidden) return;
+  // Open a printable view and let the user save as PDF via the browser dialog.
+  const w = window.open('', '_blank');
+  const title = `${($('company').value||'Company')} — ${($('role').value||'Role')} — Cover Letter`;
+  const css = `@page{margin:20mm} body{font-family:serif;line-height:1.35;color:#000;padding:0 6mm} h1{font-size:18pt;margin:0 0 8pt} pre{white-space:pre-wrap;word-wrap:break-word}`;
+  w.document.write(`<!doctype html><html><head><title>${title}</title><style>${css}</style></head><body><h1>${title}</h1><pre>${escapeHtml($('out').textContent)}</pre></body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(()=> w.print(), 300);
+};
+
+$('printBtn').onclick = () => window.print();
+
+function escapeHtml(s){
+  return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+}
+
+window.addEventListener('load', loadAutosave);
+</script>
+</html>
